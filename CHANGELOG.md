@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **test(client):** Cover `ProcessQueueMessageStore` at integer offset boundaries: ordered drain at `i64::MAX`, prepend at `i64::MIN`, sparse fallback preserving both extremes, and reuse after draining or clearing ([#10537](https://github.com/mxsm/rocketmq-rust/issues/10537)).
 - **test(model):** Add attribute update and validation contract coverage ([#10452](https://github.com/mxsm/rocketmq-rust/issues/10452)).
 - **test(remoting):** Add comprehensive test coverage for `QueryMessageResponseHeader` including integration with RemotingCommand, boundary checks, and error handling
 - **feat(tools):** Add `broker` command group with `GetBrokerConfigSubCommand` for querying broker configuration by broker address or cluster, with optional `--keyPattern` regex filtering

@@ -314,3 +314,114 @@ impl ContiguousOffsetStore {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn message_at_offset(offset: i64) -> Arc<MessageExt> {
+        Arc::new(MessageExt {
+            queue_offset: offset,
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn contiguous_offsets_at_i64_max_insert_and_drain_without_overflow() {
+        let mut store = ProcessQueueMessageStore::new();
+        store.insert(i64::MAX - 1, message_at_offset(i64::MAX - 1));
+        store.insert(i64::MAX, message_at_offset(i64::MAX));
+
+        assert_eq!(store.storage_kind(), "contiguous");
+        assert_eq!(store.len(), 2);
+        assert!(store.contains_key(&(i64::MAX - 1)));
+        assert!(store.contains_key(&i64::MAX));
+        assert_eq!(store.offset_span(), Some((i64::MAX - 1, i64::MAX)));
+
+        let (first_offset, first_message) = store.pop_first().expect("store should hold i64::MAX - 1");
+        assert_eq!(first_offset, i64::MAX - 1);
+        assert_eq!(first_message.queue_offset, i64::MAX - 1);
+
+        let (last_offset, last_message) = store.pop_first().expect("store should hold i64::MAX");
+        assert_eq!(last_offset, i64::MAX);
+        assert_eq!(last_message.queue_offset, i64::MAX);
+
+        assert!(store.is_empty());
+        assert!(store.pop_first().is_none());
+    }
+
+    #[test]
+    fn insert_below_i64_min_base_prepends_and_keeps_retrieval_order() {
+        let mut store = ProcessQueueMessageStore::new();
+        store.insert(i64::MIN + 1, message_at_offset(i64::MIN + 1));
+        store.insert(i64::MIN, message_at_offset(i64::MIN));
+
+        assert_eq!(store.storage_kind(), "contiguous");
+        assert_eq!(store.len(), 2);
+        assert_eq!(store.offset_span(), Some((i64::MIN, i64::MIN + 1)));
+        assert_eq!(store.first_offset(), Some(i64::MIN));
+
+        let (front_offset, _) = store.pop_first().expect("store should hold i64::MIN");
+        assert_eq!(front_offset, i64::MIN);
+        let (next_offset, _) = store.pop_first().expect("store should hold i64::MIN + 1");
+        assert_eq!(next_offset, i64::MIN + 1);
+
+        assert!(store.is_empty());
+    }
+
+    #[test]
+    fn integer_extremes_fall_back_to_sparse_store_preserving_exact_keys() {
+        let mut store = ProcessQueueMessageStore::new();
+        store.insert(i64::MIN, message_at_offset(i64::MIN));
+        store.insert(i64::MAX, message_at_offset(i64::MAX));
+
+        assert_eq!(store.storage_kind(), "btree");
+        assert_eq!(store.len(), 2);
+        assert!(store.contains_key(&i64::MIN));
+        assert!(store.contains_key(&i64::MAX));
+        assert_eq!(store.offset_span(), Some((i64::MIN, i64::MAX)));
+
+        let (min_offset, min_message) = store.pop_first().expect("store should hold i64::MIN");
+        assert_eq!(min_offset, i64::MIN);
+        assert_eq!(min_message.queue_offset, i64::MIN);
+
+        let (max_offset, max_message) = store.pop_first().expect("store should hold i64::MAX");
+        assert_eq!(max_offset, i64::MAX);
+        assert_eq!(max_message.queue_offset, i64::MAX);
+    }
+
+    #[test]
+    fn ordinary_offset_after_draining_i64_max_has_no_stale_base_offset() {
+        let mut store = ProcessQueueMessageStore::new();
+        store.insert(i64::MAX, message_at_offset(i64::MAX));
+        assert!(store.pop_first().is_some());
+        assert!(store.is_empty());
+
+        store.insert(3, message_at_offset(3));
+
+        assert_eq!(store.storage_kind(), "contiguous");
+        assert_eq!(store.len(), 1);
+        assert_eq!(store.offset_span(), Some((3, 3)));
+        assert_eq!(store.first_offset(), Some(3));
+        assert!(store.contains_key(&3));
+        assert!(!store.contains_key(&i64::MAX));
+    }
+
+    #[test]
+    fn ordinary_offset_after_clearing_extreme_store_has_no_stale_base_offset() {
+        let mut store = ProcessQueueMessageStore::new();
+        store.insert(i64::MIN, message_at_offset(i64::MIN));
+        store.insert(i64::MAX, message_at_offset(i64::MAX));
+        assert_eq!(store.storage_kind(), "btree");
+
+        store.clear();
+        store.insert(9, message_at_offset(9));
+
+        assert_eq!(store.storage_kind(), "contiguous");
+        assert_eq!(store.len(), 1);
+        assert_eq!(store.offset_span(), Some((9, 9)));
+        assert_eq!(store.first_offset(), Some(9));
+        assert!(!store.contains_key(&i64::MIN));
+        assert!(!store.contains_key(&i64::MAX));
+    }
+}
