@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **test(client):** Cover `Validators::check_message` early rejection branches: an absent message, missing and empty bodies under the same message-illegal code, a multi-dispatch property containing the platform path separator, and acceptance when that property is absent or separator-free ([#10539](https://github.com/mxsm/rocketmq-rust/issues/10539)).
 - **test(model):** Add attribute update and validation contract coverage ([#10452](https://github.com/mxsm/rocketmq-rust/issues/10452)).
 - **test(remoting):** Add comprehensive test coverage for `QueryMessageResponseHeader` including integration with RemotingCommand, boundary checks, and error handling
 - **feat(tools):** Add `broker` command group with `GetBrokerConfigSubCommand` for querying broker configuration by broker address or cluster, with optional `--keyPattern` regex filtering
